@@ -8,115 +8,131 @@ import { SECRET } from './constant'
 // init
 const router = Router()
 
-// 获取所有笔记列表
+// 安全获取笔记列表函数
 async function getNoteList() {
     try {
+        // 使用安全的KV列表获取
         const list = await NOTES.list()
         const notes = []
         
-        for (const key of list.keys) {
+        // 并行处理所有笔记，提高性能
+        const notePromises = list.keys.map(async (key) => {
             try {
                 const { metadata } = await queryNote(key.name)
-                notes.push({
+                return {
                     name: key.name,
                     title: decodeURIComponent(key.name),
                     updateAt: metadata?.updateAt ? dayjs.unix(metadata.updateAt).format('YYYY-MM-DD HH:mm') : 'Unknown',
                     hasPassword: !!metadata?.pw,
-                    isShared: metadata?.share
-                })
+                    isShared: !!metadata?.share
+                }
             } catch (error) {
-                console.error(`Error processing note ${key.name}:`, error)
-                // 如果单个笔记处理失败，继续处理其他笔记
-                notes.push({
+                // 单个笔记出错不影响整个列表
+                console.warn(`Failed to process note ${key.name}:`, error)
+                return {
                     name: key.name,
                     title: decodeURIComponent(key.name),
                     updateAt: 'Unknown',
                     hasPassword: false,
                     isShared: false
-                })
+                }
             }
-        }
+        })
         
-        // 按更新时间倒序排列
+        const notes = await Promise.all(notePromises)
+        
+        // 安全排序
         return notes.sort((a, b) => {
+            if (a.updateAt === 'Unknown' && b.updateAt === 'Unknown') return 0
             if (a.updateAt === 'Unknown') return 1
             if (b.updateAt === 'Unknown') return -1
-            if (a.updateAt === 'Unknown' && b.updateAt === 'Unknown') return 0
-            return new Date(b.updateAt) - new Date(a.updateAt)
+            
+            try {
+                return new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime()
+            } catch {
+                return 0
+            }
         })
     } catch (error) {
-        console.error('Get note list error:', error)
-        return []
+        console.error('Failed to get note list:', error)
+        return [] // 始终返回数组，避免undefined
     }
 }
 
-// 修改根路由，显示笔记目录而不是重定向
+// 主页显示笔记目录
 router.get('/', async (request) => {
     const lang = getI18n(request)
     
     try {
         const notes = await getNoteList()
         
+        // 确保notes是数组
+        const safeNotes = Array.isArray(notes) ? notes : []
+        
         return returnPage('NoteList', {
             lang,
             title: 'Notes Directory',
-            notes,
-            noteCount: notes.length
+            notes: safeNotes,
+            noteCount: safeNotes.length
         })
     } catch (error) {
-        console.error('Home page error:', error)
-        return returnPage('Error', { 
-            lang, 
-            title: 'Error',
-            message: 'Failed to load note directory'
-        })
+        console.error('Home page directory error:', error)
+        
+        // 出错时回退到创建新笔记
+        const newHash = genRandomStr(3)
+        return Response.redirect(`${request.url}${newHash}`, 302)
     }
 })
 
-// 新增目录路由（作为备用）
+// 备用目录页面
 router.get('/directory', async (request) => {
     const lang = getI18n(request)
     
     try {
         const notes = await getNoteList()
+        const safeNotes = Array.isArray(notes) ? notes : []
         
         return returnPage('NoteList', {
             lang,
             title: 'Notes Directory',
-            notes,
-            noteCount: notes.length
+            notes: safeNotes,
+            noteCount: safeNotes.length
         })
     } catch (error) {
         console.error('Directory page error:', error)
-        return returnPage('Error', { 
-            lang, 
+        
+        // 显示友好的错误页面
+        return returnPage('Error', {
+            lang,
             title: 'Error',
-            message: 'Failed to load note directory'
+            message: 'Unable to load note directory at this time.'
         })
     }
 })
 
-// API: 获取笔记列表 (JSON格式)
+// 创建新笔记的路由
+router.get('/new', (request) => {
+    const newHash = genRandomStr(3)
+    return Response.redirect(`${request.url}${newHash}`, 302)
+})
+
+// API端点获取笔记列表
 router.get('/api/notes', async (request) => {
     try {
         const notes = await getNoteList()
+        const safeNotes = Array.isArray(notes) ? notes : []
+        
         return returnJSON(0, {
-            notes,
-            count: notes.length
+            notes: safeNotes,
+            count: safeNotes.length
         })
     } catch (error) {
-        console.error('API get notes error:', error)
-        return returnJSON(10005, 'Get note list failed!')
+        console.error('API notes error:', error)
+        return returnJSON(10005, 'Failed to retrieve notes list')
     }
 })
 
-// 新增创建新笔记的路由
-router.get('/new', ({ url }) => {
-    const newHash = genRandomStr(3)
-    // 重定向到新页面
-    return Response.redirect(`${url}${newHash}`, 302)
-})
-
+// 以下保持原有路由不变
 router.get('/share/:md5', async (request) => {
     const lang = getI18n(request)
     const { md5 } = request.params
@@ -168,7 +184,6 @@ router.get('/:path', async (request) => {
     return returnPage('NeedPasswd', { lang, title })
 })
 
-// 其他路由保持不变...
 router.post('/:path/auth', async request => {
     const { path } = request.params
     if (request.headers.get('Content-Type') === 'application/json') {
