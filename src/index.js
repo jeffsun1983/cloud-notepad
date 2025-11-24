@@ -8,10 +8,75 @@ import { SECRET } from './constant'
 // init
 const router = Router()
 
-router.get('/', ({ url }) => {
-    const newHash = genRandomStr(3)
-    // redirect to new page
-    return Response.redirect(`${url}${newHash}`, 302)
+// 获取所有笔记列表
+async function getNoteList() {
+    try {
+        const list = await NOTES.list()
+        const notes = []
+        
+        for (const key of list.keys) {
+            const { metadata } = await queryNote(key.name)
+            notes.push({
+                name: key.name,
+                title: decodeURIComponent(key.name),
+                updateAt: metadata.updateAt ? dayjs.unix(metadata.updateAt).format('YYYY-MM-DD HH:mm') : 'Unknown',
+                hasPassword: !!metadata.pw,
+                isShared: metadata.share
+            })
+        }
+        
+        // 按更新时间倒序排列
+        return notes.sort((a, b) => {
+            if (!a.updateAt || a.updateAt === 'Unknown') return 1
+            if (!b.updateAt || b.updateAt === 'Unknown') return -1
+            return new Date(b.updateAt) - new Date(a.updateAt)
+        })
+    } catch (error) {
+        console.error('Get note list error:', error)
+        return []
+    }
+}
+
+router.get('/', async ({ url }) => {
+    const lang = getI18n({ headers: new Headers() }) // 简化处理
+    
+    // 显示笔记目录页面
+    const notes = await getNoteList()
+    
+    return returnPage('NoteList', {
+        lang,
+        title: 'Notes Directory',
+        notes,
+        noteCount: notes.length
+    })
+})
+
+router.get('/directory', async (request) => {
+    const lang = getI18n(request)
+    
+    // 显示笔记目录页面
+    const notes = await getNoteList()
+    
+    return returnPage('NoteList', {
+        lang,
+        title: 'Notes Directory',
+        notes,
+        noteCount: notes.length
+    })
+})
+
+// API: 获取笔记列表 (JSON格式)
+router.get('/api/notes', async (request) => {
+    try {
+        const notes = await getNoteList()
+        return returnJSON(0, {
+            notes,
+            count: notes.length
+        })
+    } catch (error) {
+        console.error('API get notes error:', error)
+        return returnJSON(10005, 'Get note list failed!')
+    }
 })
 
 router.get('/share/:md5', async (request) => {
@@ -65,6 +130,7 @@ router.get('/:path', async (request) => {
     return returnPage('NeedPasswd', { lang, title })
 })
 
+// 其他路由保持不变...
 router.post('/:path/auth', async request => {
     const { path } = request.params
     if (request.headers.get('Content-Type') === 'application/json') {
@@ -156,7 +222,6 @@ router.post('/:path/setting', async request => {
                     await SHARE.delete(md5)
                 }
 
-
                 return returnJSON(0)
             } catch (error) {
                 console.error(error)
@@ -184,7 +249,6 @@ router.post('/:path', async request => {
     const content = formData.get('t')
 
     try {
-
         if (content?.trim()){
             // 有值修改
             await NOTES.put(path, content, {
@@ -208,7 +272,7 @@ router.post('/:path', async request => {
 
 router.all('*', (request) => {
     const lang = getI18n(request)
-    returnPage('Page404', { lang, title: '404' })
+    return returnPage('Page404', { lang, title: '404' })
 })
 
 addEventListener('fetch', event => {
