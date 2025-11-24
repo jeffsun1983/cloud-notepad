@@ -50,14 +50,30 @@ async function getNoteList() {
     }
 }
 
-// 保持原来的根路由行为，不修改它
-router.get('/', ({ url }) => {
-    const newHash = genRandomStr(3)
-    // redirect to new page
-    return Response.redirect(`${url}${newHash}`, 302)
+// 修改根路由，显示笔记目录而不是重定向
+router.get('/', async (request) => {
+    const lang = getI18n(request)
+    
+    try {
+        const notes = await getNoteList()
+        
+        return returnPage('NoteList', {
+            lang,
+            title: 'Notes Directory',
+            notes,
+            noteCount: notes.length
+        })
+    } catch (error) {
+        console.error('Home page error:', error)
+        return returnPage('Error', { 
+            lang, 
+            title: 'Error',
+            message: 'Failed to load note directory'
+        })
+    }
 })
 
-// 新增目录路由
+// 新增目录路由（作为备用）
 router.get('/directory', async (request) => {
     const lang = getI18n(request)
     
@@ -92,6 +108,13 @@ router.get('/api/notes', async (request) => {
         console.error('API get notes error:', error)
         return returnJSON(10005, 'Get note list failed!')
     }
+})
+
+// 新增创建新笔记的路由
+router.get('/new', ({ url }) => {
+    const newHash = genRandomStr(3)
+    // 重定向到新页面
+    return Response.redirect(`${url}${newHash}`, 302)
 })
 
 router.get('/share/:md5', async (request) => {
@@ -145,6 +168,7 @@ router.get('/:path', async (request) => {
     return returnPage('NeedPasswd', { lang, title })
 })
 
+// 其他路由保持不变...
 router.post('/:path/auth', async request => {
     const { path } = request.params
     if (request.headers.get('Content-Type') === 'application/json') {
