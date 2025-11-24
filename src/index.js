@@ -8,131 +8,12 @@ import { SECRET } from './constant'
 // init
 const router = Router()
 
-// 安全获取笔记列表函数
-async function getNoteList() {
-    try {
-        // 使用安全的KV列表获取
-        const list = await NOTES.list()
-        const notes = []
-        
-        // 并行处理所有笔记，提高性能
-        const notePromises = list.keys.map(async (key) => {
-            try {
-                const { metadata } = await queryNote(key.name)
-                return {
-                    name: key.name,
-                    title: decodeURIComponent(key.name),
-                    updateAt: metadata?.updateAt ? dayjs.unix(metadata.updateAt).format('YYYY-MM-DD HH:mm') : 'Unknown',
-                    hasPassword: !!metadata?.pw,
-                    isShared: !!metadata?.share
-                }
-            } catch (error) {
-                // 单个笔记出错不影响整个列表
-                console.warn(`Failed to process note ${key.name}:`, error)
-                return {
-                    name: key.name,
-                    title: decodeURIComponent(key.name),
-                    updateAt: 'Unknown',
-                    hasPassword: false,
-                    isShared: false
-                }
-            }
-        })
-        
-        const notes = await Promise.all(notePromises)
-        
-        // 安全排序
-        return notes.sort((a, b) => {
-            if (a.updateAt === 'Unknown' && b.updateAt === 'Unknown') return 0
-            if (a.updateAt === 'Unknown') return 1
-            if (b.updateAt === 'Unknown') return -1
-            
-            try {
-                return new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime()
-            } catch {
-                return 0
-            }
-        })
-    } catch (error) {
-        console.error('Failed to get note list:', error)
-        return [] // 始终返回数组，避免undefined
-    }
-}
-
-// 主页显示笔记目录
-router.get('/', async (request) => {
-    const lang = getI18n(request)
-    
-    try {
-        const notes = await getNoteList()
-        
-        // 确保notes是数组
-        const safeNotes = Array.isArray(notes) ? notes : []
-        
-        return returnPage('NoteList', {
-            lang,
-            title: 'Notes Directory',
-            notes: safeNotes,
-            noteCount: safeNotes.length
-        })
-    } catch (error) {
-        console.error('Home page directory error:', error)
-        
-        // 出错时回退到创建新笔记
-        const newHash = genRandomStr(3)
-        return Response.redirect(`${request.url}${newHash}`, 302)
-    }
-})
-
-// 备用目录页面
-router.get('/directory', async (request) => {
-    const lang = getI18n(request)
-    
-    try {
-        const notes = await getNoteList()
-        const safeNotes = Array.isArray(notes) ? notes : []
-        
-        return returnPage('NoteList', {
-            lang,
-            title: 'Notes Directory',
-            notes: safeNotes,
-            noteCount: safeNotes.length
-        })
-    } catch (error) {
-        console.error('Directory page error:', error)
-        
-        // 显示友好的错误页面
-        return returnPage('Error', {
-            lang,
-            title: 'Error',
-            message: 'Unable to load note directory at this time.'
-        })
-    }
-})
-
-// 创建新笔记的路由
-router.get('/new', (request) => {
+router.get('/', ({ url }) => {
     const newHash = genRandomStr(3)
-    return Response.redirect(`${request.url}${newHash}`, 302)
+    // redirect to new page
+    return Response.redirect(`${url}${newHash}`, 302)
 })
 
-// API端点获取笔记列表
-router.get('/api/notes', async (request) => {
-    try {
-        const notes = await getNoteList()
-        const safeNotes = Array.isArray(notes) ? notes : []
-        
-        return returnJSON(0, {
-            notes: safeNotes,
-            count: safeNotes.length
-        })
-    } catch (error) {
-        console.error('API notes error:', error)
-        return returnJSON(10005, 'Failed to retrieve notes list')
-    }
-})
-
-// 以下保持原有路由不变
 router.get('/share/:md5', async (request) => {
     const lang = getI18n(request)
     const { md5 } = request.params
@@ -275,6 +156,7 @@ router.post('/:path/setting', async request => {
                     await SHARE.delete(md5)
                 }
 
+
                 return returnJSON(0)
             } catch (error) {
                 console.error(error)
@@ -302,6 +184,7 @@ router.post('/:path', async request => {
     const content = formData.get('t')
 
     try {
+
         if (content?.trim()){
             // 有值修改
             await NOTES.put(path, content, {
@@ -325,7 +208,7 @@ router.post('/:path', async request => {
 
 router.all('*', (request) => {
     const lang = getI18n(request)
-    return returnPage('Page404', { lang, title: '404' })
+    returnPage('Page404', { lang, title: '404' })
 })
 
 addEventListener('fetch', event => {
