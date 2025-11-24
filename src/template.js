@@ -49,6 +49,77 @@ const HTML = ({ lang, title, content, ext = {}, tips, isEdit, showPwPrompt }) =>
     <title>${title} — Cloud Notepad</title>
     <link href="${CDN_PREFIX}/favicon.ico" rel="shortcut icon" type="image/ico" />
     <link href="${CDN_PREFIX}/css/app.min.css" rel="stylesheet" media="screen" />
+
+const HTML = ({ lang, title, content, ext = {}, tips, isEdit, showPwPrompt }) => `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title} — Cloud Notepad</title>
+    <link href="${CDN_PREFIX}/favicon.ico" rel="shortcut icon" type="image/ico" />
+    <link href="${CDN_PREFIX}/css/app.min.css" rel="stylesheet" media="screen" />
+    <style>
+        /* Markdown图片自适应样式 */
+        .contents img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 10px auto;
+            border-radius: 4px;
+        }
+        
+        /* 确保预览区域的图片也自适应 */
+        #preview-md img {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* 代码块和其他内容自适应 */
+        .contents pre, .contents code {
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        /* 表格自适应 */
+        .contents table {
+            max-width: 100%;
+            overflow-x: auto;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="note-container">
+        <div class="stack">
+            <div class="layer_1">
+                <div class="layer_2">
+                    <div class="layer_3">
+                        ${tips ? `<div class="tips">${tips}</div>` : ''}
+                        <textarea id="contents" class="contents ${isEdit ? '' : 'hide'}" spellcheck="true" placeholder="${SUPPORTED_LANG[lang].emptyPH}">${content}</textarea>
+                        ${(isEdit && ext.mode === 'md') ? '<div class="divide-line"></div>' : ''}
+                        ${tips || (isEdit && ext.mode !== 'md') ? '' : `<div id="preview-${ext.mode || 'plain'}" class="contents"></div>`}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="loading"></div>
+    ${MODAL(lang)}
+    ${FOOTER({ ...ext, isEdit, lang })}
+    ${(ext.mode === 'md' || ext.share) ? `<script src="${CDN_PREFIX}/js/purify.min.js"></script>` : ''}
+    ${ext.mode === 'md' ? `<script src="${CDN_PREFIX}/js/marked.min.js"></script>` : ''}
+    <script src="${CDN_PREFIX}/js/clip.min.js"></script>
+    <script src="${CDN_PREFIX}/js/app.min.js"></script>
+    ${showPwPrompt ? '<script>passwdPrompt()</script>' : ''}
+</body>
+</html>
+`
+
+    
 </head>
 <body>
     <div class="note-container">
