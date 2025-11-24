@@ -49,35 +49,24 @@ const HTML = ({ lang, title, content, ext = {}, tips, isEdit, showPwPrompt }) =>
     <title>${title} — Cloud Notepad</title>
     <link href="${CDN_PREFIX}/favicon.ico" rel="shortcut icon" type="image/ico" />
     <link href="${CDN_PREFIX}/css/app.min.css" rel="stylesheet" media="screen" />
-
-const HTML = ({ lang, title, content, ext = {}, tips, isEdit, showPwPrompt }) => `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title} — Cloud Notepad</title>
-    <link href="${CDN_PREFIX}/favicon.ico" rel="shortcut icon" type="image/ico" />
-    <link href="${CDN_PREFIX}/css/app.min.css" rel="stylesheet" media="screen" />
     <style>
-        /* Markdown图片自适应样式 */
-        .contents img {
-            max-width: 100%;
-            height: auto;
+        /* 增强的Markdown图片和内容自适应样式 */
+        .contents img, #preview-md img {
+            max-width: 100% !important;
+            height: auto !important;
             display: block;
             margin: 10px auto;
             border-radius: 4px;
+            box-sizing: border-box;
         }
         
-        /* 确保预览区域的图片也自适应 */
-        #preview-md img {
+        /* 确保所有预览区域的图片都自适应 */
+        #preview-md * {
             max-width: 100%;
-            height: auto;
         }
         
-        /* 代码块和其他内容自适应 */
-        .contents pre, .contents code {
+        /* 代码块自适应 */
+        .contents pre, .contents code, #preview-md pre, #preview-md code {
             max-width: 100%;
             overflow-x: auto;
             white-space: pre-wrap;
@@ -85,10 +74,35 @@ const HTML = ({ lang, title, content, ext = {}, tips, isEdit, showPwPrompt }) =>
         }
         
         /* 表格自适应 */
-        .contents table {
+        .contents table, #preview-md table {
             max-width: 100%;
             overflow-x: auto;
             display: block;
+        }
+        
+        /* 确保iframe和视频也自适应 */
+        .contents iframe, .contents video, 
+        #preview-md iframe, #preview-md video {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* 响应式设计增强 */
+        @media (max-width: 768px) {
+            .contents img, #preview-md img {
+                margin: 8px auto;
+            }
+            
+            .contents, #preview-md {
+                padding: 0 10px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .contents img, #preview-md img {
+                margin: 5px auto;
+                border-radius: 2px;
+            }
         }
     </style>
 </head>
@@ -114,35 +128,45 @@ const HTML = ({ lang, title, content, ext = {}, tips, isEdit, showPwPrompt }) =>
     ${ext.mode === 'md' ? `<script src="${CDN_PREFIX}/js/marked.min.js"></script>` : ''}
     <script src="${CDN_PREFIX}/js/clip.min.js"></script>
     <script src="${CDN_PREFIX}/js/app.min.js"></script>
-    ${showPwPrompt ? '<script>passwdPrompt()</script>' : ''}
-</body>
-</html>
-`
-
-    
-</head>
-<body>
-    <div class="note-container">
-        <div class="stack">
-            <div class="layer_1">
-                <div class="layer_2">
-                    <div class="layer_3">
-                        ${tips ? `<div class="tips">${tips}</div>` : ''}
-                        <textarea id="contents" class="contents ${isEdit ? '' : 'hide'}" spellcheck="true" placeholder="${SUPPORTED_LANG[lang].emptyPH}">${content}</textarea>
-                        ${(isEdit && ext.mode === 'md') ? '<div class="divide-line"></div>' : ''}
-                        ${tips || (isEdit && ext.mode !== 'md') ? '' : `<div id="preview-${ext.mode || 'plain'}" class="contents"></div>`}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="loading"></div>
-    ${MODAL(lang)}
-    ${FOOTER({ ...ext, isEdit, lang })}
-    ${(ext.mode === 'md' || ext.share) ? `<script src="${CDN_PREFIX}/js/purify.min.js"></script>` : ''}
-    ${ext.mode === 'md' ? `<script src="${CDN_PREFIX}/js/marked.min.js"></script>` : ''}
-    <script src="${CDN_PREFIX}/js/clip.min.js"></script>
-    <script src="${CDN_PREFIX}/js/app.min.js"></script>
+    <script>
+        // 确保Markdown渲染时图片自适应
+        if (typeof marked !== 'undefined') {
+            // 配置marked选项以确保图片正确渲染
+            marked.setOptions({
+                breaks: true,
+                gfm: true
+            });
+        }
+        
+        // 页面加载完成后检查图片尺寸
+        document.addEventListener('DOMContentLoaded', function() {
+            // 监听内容变化，确保新插入的图片也能自适应
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) { // Element node
+                                const imgs = node.tagName === 'IMG' ? [node] : node.querySelectorAll('img');
+                                imgs.forEach(function(img) {
+                                    img.style.maxWidth = '100%';
+                                    img.style.height = 'auto';
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+            
+            // 观察预览区域的变化
+            const previewElement = document.getElementById('preview-md');
+            if (previewElement) {
+                observer.observe(previewElement, {
+                    childList: true,
+                    subtree: true
+                });
+            }
+        });
+    </script>
     ${showPwPrompt ? '<script>passwdPrompt()</script>' : ''}
 </body>
 </html>
